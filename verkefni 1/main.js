@@ -4,7 +4,7 @@ import path from 'node:path';
 const INDEX_PATH = './data/index.json';
 const DIST_FOLDER = './dist';
 
-// Lesa JSON skrá
+// Lesa JSON skrár
 async function readJson(filePath) {
     //bíða eftir harða disknum að lesa skrána
     //erum að búa til loforð
@@ -12,6 +12,7 @@ async function readJson(filePath) {
   try {
     const data = await fs.readFile(path.resolve(filePath), 'utf-8');
     return JSON.parse(data);
+    
   } catch (error) {
     console.error(`Error reading file ${filePath}:`, error.message);
     return null;
@@ -50,9 +51,18 @@ async function main() {
     indexData.map(async (item) => {
       const filePath = `./data/${item.file}`;
       const fileData = await readJson(filePath);
+      
+      if(!fileData) {
+        console.warn(`Skipping corrupt or unreadable file: ${filePath}`);
+        return null;
+      }
+
       return fileData ? { ...item, content: fileData } : null;
     }),
   );
+
+
+
 }
 
 main();
