@@ -2,7 +2,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 const INDEX_PATH = './data/index.json';
+const DIST_FOLDER = './dist';
 
+// Lesa JSON skrá
 async function readJson(filePath) {
     //bíða eftir harða disknum að lesa skrána
     //erum að búa til loforð
@@ -16,10 +18,26 @@ async function readJson(filePath) {
   }
 }
 
-async function main() {
-    console.log('Hello, world!');
+async function createFolder(folderPath) {
 
+    try {
+        await fs.mkdir(folderPath);
+        console.log(`Created folder ${folderPath}`);
+    } catch (error) {
+        if (error.code !== 'EEXIST') {
+            console.error(`Error creating folder ${folderPath}:`, error.message);
+        }
+    }
+
+}
+
+async function main() {
+    console.log('Starting program...');
+
+    // Búa til dist-möppuna ef hún er ekki til
+    await createFolder(DIST_FOLDER);
     
+
     const indexData = await readJson(INDEX_PATH);
 
   if (!Array.isArray(indexData)) {
