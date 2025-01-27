@@ -1,6 +1,12 @@
 # vefforitun verkefni 1
 
-## Keyrsla með:
+## Keyrsla
 
 Þarf node útgáfu 22 að minnsta kosti.
+
+Keyrum með:
+
+```bash
+npm install
 node main.js
+```
