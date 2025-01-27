@@ -2,7 +2,7 @@
 
 ## Keyrsla
 
-Þarf node útgáfu 22 að minnsta kosti.
+Það þarf node útgáfu 22 að minnsta kosti.
 
 Keyrum með:
 
