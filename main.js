@@ -31,18 +31,23 @@ async function ensureDirectoryExists(directory) {
  * Skilar `null` ef villa kom upp.
  */
 async function readJson(filePath) {
-   
-    console.log('starting to read', filePath);
-    let data;
-    try {
-      console.log('reading file', filePath);
-      data = await fs.readFile(path.resolve(filePath), 'utf-8');
-      return JSON.parse(data);
-    } catch (error) {
+  console.log('starting to read', filePath);
+  let data;
+  try {
+    console.log('reading file', filePath);
+    data = await fs.readFile(path.resolve(filePath), 'utf-8');
+    return JSON.parse(data);
+  } catch (error) {
+    if(error.code === 'ENOENT') {
+      console.error(`File not found: ${filePath}`);
+    } else if (error instanceof SyntaxError) {
+      console.error(`Error parsing JSON in file ${filePath}: ${error.message}`);
+    } else {
       console.error(`Error reading file ${filePath}:`, error.message);
-      return null;
     }
+    return null;
   }
+}
   
 
 /**
@@ -189,7 +194,6 @@ async function main() {
     console.log('Program completed successfully.');
    
   }
-
-  main().catch((error) => {
-    console.error('An unexpected error occurred:', error);
+  main().catch((err) => {
+    console.error('Error running program:', err);
   });
