@@ -1,8 +1,32 @@
+
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
 
 const INDEX_PATH = './data/index.json';
+const DIST_DIR = './dist';
+const HTML_FILE_PATH = path.join(DIST_DIR, 'index.html');
+
+async function ensureDirectoryExists(directory) {
+  console.log('Ensuring directory exists:', directory);
+  try {
+    await fs.mkdir(directory, { recursive: true });
+  } catch (error) {
+    console.error(`Error creating directory ${directory}:`, error.message);
+  }
+}
+
+/*
+async function writeHtmlFile(htmlContent) {
+  await ensureDirectoryExists(DIST_DIR);
+  try {
+    await fs.writeFile(HTML_FILE_PATH, htmlContent, 'utf-8');
+    console.log(`File written to ${HTML_FILE_PATH}`);
+  } catch (error) {
+    console.error(`Error writing file ${HTML_FILE_PATH}:`, error.message);
+  }
+}
+*/
 
 
 /**
@@ -18,6 +42,7 @@ async function readJson(filePath) {
     console.log('starting to read', filePath);
     let data;
     try {
+      console.log('reading file', filePath);
       data = await fs.readFile(path.resolve(filePath), 'utf-8');
     } catch (error) {
       console.error(`Error reading file ${filePath}:`, error.message);
@@ -25,6 +50,7 @@ async function readJson(filePath) {
     }
     try {
       const parsed = JSON.parse(data); 
+      console.log('data parsed');
       return parsed;
     } catch (error) {
       console.error('Error parsing data as json');
@@ -41,7 +67,15 @@ async function readJson(filePath) {
  * @returns {Promise<void>} skrifar gögn í index.html
  */
 async function writeHtml(data) {
-    const htmlFilePath = 'dist/index.html';
+  console.log('Starting to write HTML file...');
+  if (!Array.isArray(data)) {
+    console.error('Invalid data format, expected an array.');
+    return;
+  }
+
+  await ensureDirectoryExists(DIST_DIR);
+
+  //const htmlFilePath = 'dist/index.html';
 
     const html = data.map((item) => `<li>${item.title}</li>`).join('\n');
 
@@ -61,7 +95,12 @@ async function writeHtml(data) {
       </html>
       `;
 
-    fs.writeFile(htmlFilePath, htmlContent, 'utf-8');
+     try {
+    await fs.writeFile(HTML_FILE_PATH, htmlContent, 'utf-8');
+    console.log(`HTML written to ${HTML_FILE_PATH}`);
+  } catch (error) {
+    console.error(`Error writing HTML file:`, error.message);
+  }
 }
 
 
@@ -69,12 +108,16 @@ async function writeHtml(data) {
  * 
  * Það tekur inn data og skilar string
  * @param {unknown} data
- * @returns{any} skilar data sem streng en for now: any
+ * @returns{Array<{ title: string }>} skilar data sem streng en for now: any
  * 
  */
 
 function parseIndexJson(data) {
- return data;
+  if (!Array.isArray(data)) {
+    console.error('Invalid JSON data. Expected an array.');
+    return [];
+  }
+  return data;
 }
 
 
@@ -88,62 +131,25 @@ function parseIndexJson(data) {
 async function main() {
 
     console.log('Starting program...');
-    
-    // Búa til dist-möppuna ef hún er ekki til
-    /*
-    await createFolder(DIST_FOLDER);
-    */
 
     const indexJson = await readJson(INDEX_PATH);
+    if (!indexJson) {
+      console.error('Error reading index.json');
+      return;
+    }
     
     const indexData = parseIndexJson(indexJson);
-   
-    writeHtml(indexData);
-    
-   console.log(indexData);
+    if (indexData.length === 0) {
+      console.error('No valid data in index.json');
+      return;
+    }
 
+    await writeHtml(indexData);
    
-   
-
-    /*
-  if (!Array.isArray(indexData)) {
-    console.error('index.json is not an array. Check the file format.');
-    return [];
+    console.log('Program completed successfully.');
+    console.log(indexData);
   }
 
-  // Read other JSON files listed in index.json
-  const allData = await Promise.all(
-    indexData.map(async (item) => {
-      const filePath = `./data/${item.file}`;
-      const fileData = await readJson(filePath);
-      
-      if(!fileData) {
-        console.warn(`Skipping corrupt or unreadable file: ${filePath}`);
-        return null;
-      }
-
-      return fileData ? { ...item, content: fileData } : null;
-    }),
-  );
-
-*/
-
-/**
- * Notkun: writehtml
- * Fyrir: data er strengur með html
- * eftir: skrifar data í index.html
- * @param {*} data gögn til að skrifa
- * @returns {Promise<void>} skrifar gögn í index.html
- */
-/*
-async function writeHtml(data) {
-    const htmlFilePath = 'index.html';
-    const htmlContent = '<html><h1>halló heimur</h1></html>';
-
-    fs.writeFile(htmlFilePath, htmlContent, 'utf-8');
-    
-}*/
-
-}
-
-main();
+  main().catch((error) => {
+    console.error('An unexpected error occurred:', error);
+  });
