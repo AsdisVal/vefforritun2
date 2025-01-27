@@ -1,4 +1,4 @@
-# vefforritun verkefni 1
+# Vefforritun verkefni 1
 
 ## Keyrsla
 
