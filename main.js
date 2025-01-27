@@ -3,7 +3,7 @@ import path from 'node:path';
 
 
 const INDEX_PATH = './data/index.json';
-//const DIST_FOLDER = './dist';
+
 
 /**
  * 
@@ -31,26 +31,12 @@ async function readJson(filePath) {
       return null;
     }
   }
-  /*
-  async function createFolder(folderPath) {
-
-    try {
-        await fs.mkdir(folderPath);
-        console.log(`Created folder ${folderPath}`);
-    } catch (error) {
-        if (error.code !== 'EEXIST') {
-            console.error(`Error creating folder ${folderPath}:`, error.message);
-        }
-    }
-
-}*/
+  
 
 
 
 /**
- * NOTKUN: writeHtml(data)
- * FYRIR: data er strengur með html
- * EFTIR: skrifar data í index.html
+ * Skrifa HTML fyrir yfirlit í index.html
  * @param {any} data 
  * @returns {Promise<void>} skrifar gögn í index.html
  */
