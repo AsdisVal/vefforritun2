@@ -5,7 +5,7 @@ import path from 'node:path';
 
 
 const INDEX_PATH = './data/index.json'; 
-const DIST_DIR = './dist'; // skráar slóðin sem við ætlum að skrifa í
+const DIST_DIR = './dist'; // skráarslóðin sem við ætlum að skrifa í
 const HTML_FILE_PATH = path.join(DIST_DIR, 'index.html');
 
 /**
