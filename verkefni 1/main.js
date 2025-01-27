@@ -1,42 +1,38 @@
-import { write } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { stringify } from 'node:querystring';
+
 
 const INDEX_PATH = './data/index.json';
-const DIST_FOLDER = './dist';
+//const DIST_FOLDER = './dist';
 
 /**
  * 
- * @param {string} filePath skráin sem á að lesa og skilar gögnum eða null.
+ * Les skrá og skilar gögnum eða null.
+ * @param {string} filePath skráin sem á að lesa
  *  
- * @returns {Promise<unknown | null>}les skrá úr filepath og skilar innihaldi.
- * Skilar null ef ekki tekst að lesa skrá
+ * @returns {Promise<unknown | null>}les skrá úr `filepath` og skilar innihaldi.
+ * Skilar `null` ef villa kom upp.
  */
 async function readJson(filePath) {
-    //bíða eftir harða disknum að lesa skrána
-    //erum að búa til loforð
-    let data;
+   
     console.log('starting to read', filePath);
-  try {
-    const data = await fs.readFile(path.resolve(filePath), 'utf-8');
-    return JSON.parse(data);
-    
-  } catch (error) {
-    console.error(`Error reading file ${filePath}:`, error.message);
-    return null;
+    let data;
+    try {
+      data = await fs.readFile(path.resolve(filePath), 'utf-8');
+    } catch (error) {
+      console.error(`Error reading file ${filePath}:`, error.message);
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(data); 
+      return parsed;
+    } catch (error) {
+      console.error('Error parsing data as json');
+      return null;
+    }
   }
-
-  try{
-    const parsed = JSON.parse(data); 
-    return JSON.parse(data);
-  }catch (error) {
-    console.error(`Error parsing data as json`);
-    return null;
-  }
-}
-
-async function createFolder(folderPath) {
+  /*
+  async function createFolder(folderPath) {
 
     try {
         await fs.mkdir(folderPath);
@@ -47,40 +43,81 @@ async function createFolder(folderPath) {
         }
     }
 
+}*/
+
+
+
+/**
+ * NOTKUN: writeHtml(data)
+ * FYRIR: data er strengur með html
+ * EFTIR: skrifar data í index.html
+ * @param {any} data 
+ * @returns {Promise<void>} skrifar gögn í index.html
+ */
+async function writeHtml(data) {
+    const htmlFilePath = 'dist/index.html';
+
+    const html = data.map((item) => `<li>${item.title}</li>`).join('\n');
+
+    const htmlContent =  `
+    <!DOCTYPE html>
+    <html lang="is">
+    <head>
+      <meta charset="UTF-8">
+      <title>Verkefni 1</title>
+      </head>
+      <body>
+      <h1>Verkefni 1</h1>
+      <ul>
+        ${html}
+      </ul>
+      </body>
+      </html>
+      `;
+
+    fs.writeFile(htmlFilePath, htmlContent, 'utf-8');
 }
 
 
 /**
  * 
+ * Það tekur inn data og skilar string
  * @param {unknown} data
- * @returns{Array<title: string; file: string;> | null} 
+ * @returns{any} skilar data sem streng en for now: any
  * 
  */
+
 function parseIndexJson(data) {
-    if (typeof data !== 'string') {
-    return data;
-    }
-    return null;
+ return data;
 }
+
 
 /** 
  *Keyrir forritið okkar: 
  * 1. Sækir gögn
- * 2. Staðfestir að gögn séu í réttu formatti
+ * 2. Staðfestir gögn (validation)
+ * 3. Skrifar út HTML
  *  
 */
 async function main() {
-    console.log('Starting program...');
 
-    // Búa til dist-möppuna ef hún er ekki til
-    await createFolder(DIST_FOLDER);
+    console.log('Starting program...');
     
+    // Búa til dist-möppuna ef hún er ekki til
+    /*
+    await createFolder(DIST_FOLDER);
+    */
 
     const indexJson = await readJson(INDEX_PATH);
-
+    
     const indexData = parseIndexJson(indexJson);
+   
     writeHtml(indexData);
     
+   console.log(indexData);
+
+   
+   
 
     /*
   if (!Array.isArray(indexData)) {
@@ -112,13 +149,15 @@ async function main() {
  * @param {*} data gögn til að skrifa
  * @returns {Promise<void>} skrifar gögn í index.html
  */
+/*
 async function writeHtml(data) {
     const htmlFilePath = 'index.html';
     const htmlContent = '<html><h1>halló heimur</h1></html>';
 
     fs.writeFile(htmlFilePath, htmlContent, 'utf-8');
     
-}
+}*/
+
 }
 
 main();
