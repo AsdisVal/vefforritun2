@@ -27,11 +27,10 @@ async function ensureDirectoryExists(directory) {
  * Les skrá og skilar gögnum eða null.
  * @param {string} filePath skráin sem á að lesa
  *  
- * @returns {Promise<unknown | null>}les skrá úr `filepath` og skilar innihaldi.
+ * @returns {Promise<Object | null>}les skrá úr `filepath` og skilar innihaldi.
  * Skilar `null` ef villa kom upp.
  */
 async function readJson(filePath) {
-  console.log('starting to read', filePath);
   let data;
   try {
     console.log('reading file', filePath);
@@ -50,26 +49,57 @@ async function readJson(filePath) {
 }
   
 
+  /**
+   * Validates that an entry has a title and a file property.
+    * @param {Object} entry
+    * @returns {boolean} true if the entry is valid, otherwise false.
+   */
+  function validateEntry(entry) {
+    if(entry && typeof entry === 'object') { 
+      const { title, file } = entry;
+      let isValid = true;
+      // Check for valid title
+      if (typeof title !== 'string' || title.trim() === '') {
+        console.warn(`Invalid title for entry: ${JSON.stringify(entry)}`);
+        isValid = false;
+      }
+      // Check for valid file path
+      if (typeof file !== 'string' || file.trim() === '' || !file.endsWith('.json')) {
+        console.warn(`Invalid file path for entry: ${JSON.stringify(entry)}`);
+        isValid = false;
+      }
+      
+      return isValid;
+    }
+    console.warn(`Entry is not a valid object: ${JSON.stringify(entry)}`);
+    return false
+  }
+
+  async function filterExistingJsonFiles(data) {
+    const filteredData = [];
+    for (const entry of data) {
+      const filePath = path.join('./data', entry.file);
+      try {
+        await fs.access(filePath);
+        filteredData.push(entry);
+      } catch (error) {
+        console.warn(`Referenced JSON file not found: ${filePath}`);
+      }
+    }
+    return filteredData;
+  }
+
+
 /**
- * Skrifar forsíðu HTML með tenglum á aðrar síður
- * @param {any} data 
+ * Write the main index.html file with links to indiviual pages.
+ * @param {Object[]} data - Array of valid data entries. 
  * @returns {Promise<void>} skrifar gögn í index.html
  */
 async function writeHtml(data) {
-    if (!Array.isArray(data)) {
-    console.error('Invalid data format, expected an array.');
-    return;
-    }
-
-    await ensureDirectoryExists(DIST_DIR);
-    const html = data
+  const html = data
     .map((item) => {
-      if (item.file && item.title) {
-        const link = item.file.replace('.json', '.html');
-        return `<li><a href="${link}">${item.title}</a></li>`;
-      } 
-      console.warn('Invalid data item:', item);
-      return '';
+      const link = item.file.replace('.json', '.html');
+      return `<li><a href="${link}">${item.title}</a></li>`;     
     })
     .join('\n');
   
@@ -98,39 +128,11 @@ async function writeHtml(data) {
   }
 
   /**
-   * Validates that an entry has a title and a file property.
-    * @param {*} entry
-    * @returns {boolean} true if the entry is valid, otherwise false.
-   */
-  function validateEntry(entry) {
-    if(entry && typeof entry === 'object') { 
-      const { title, file } = entry;
-      let isValid = true;
-      if (typeof title !== 'string' || title.trim() === '') {
-        console.warn(`Invalid title for entry: ${JSON.stringify(entry)}`);
-        isValid = false;
-      }
-      if (typeof file !== 'string' || file.trim() === '' || !file.endsWith('.json')) {
-        console.warn(`Invalid file path for entry: ${JSON.stringify(entry)}`);
-        isValid = false;
-      }
-      return isValid;
-    }
-    console.warn(`Entry is not a valid object: ${JSON.stringify(entry)}`);
-    return false
-  }
-
-  /**
    * Generates individual HTML files for each entry in the data, displaying the content of the corresponding JSON file.
    * @param {*} data 
    */
   async function createIndividualHtmlFiles(data) {
     for (const item of data) {
-      if (!validateEntry(item)) {
-        console.warn('Skipping invalid entry:', item);
-        continue;
-      }
-  
       const filePath = path.join('./data', item.file);
       const content = await readJson(filePath);
   
@@ -164,32 +166,33 @@ async function writeHtml(data) {
   }
 
 
-
-/**
- * 1. Ensuring the output directory exists.
- * 2. Reads the index.json file and validates its content.
- * 3. Calls writeHtml to generate the index.html file.
- * 4. Calls createIndividualHtmlFiles to generate individual HTML files for each valid entry.
- */
-async function main() {
+  /**
+  * 1. Ensuring the output directory exists.
+  * 2. Reads the index.json file and validates its content.
+  * 3. Calls writeHtml to generate the index.html file.
+  * 4. Calls createIndividualHtmlFiles to generate individual HTML files for each valid entry.
+  */
+  async function main() {
 
     console.log('Starting program...');
     await ensureDirectoryExists(DIST_DIR);
 
     const indexJson = await readJson(INDEX_PATH);
     if (!Array.isArray(indexJson)) {
-      console.error('Error reading index.json');
+      console.error('Error: index.json must contain an array of entries.');
       return;
     }
     
-    const validData = indexJson.filter(validateEntry);
-    if (validData.length === 0) {
+    const validEntries = indexJson.filter(validateEntry);
+    const existingFiles = await filterExistingJsonFiles(validEntries);
+    if (existingFiles.length === 0) {
       console.error('No valid data found in index.json');
       return;
     }
+    
 
-    await writeHtml(validData);
-    await createIndividualHtmlFiles(validData);
+    await writeHtml(existingFiles);
+    await createIndividualHtmlFiles(existingFiles);
 
     console.log('Program completed successfully.');
    
