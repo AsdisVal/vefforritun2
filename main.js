@@ -1,4 +1,5 @@
 
+import { write } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -17,8 +18,6 @@ async function ensureDirectoryExists(directory) {
 }
 
 
-
-
 /**
  * 
  * Les skrá og skilar gögnum eða null.
@@ -34,22 +33,13 @@ async function readJson(filePath) {
     try {
       console.log('reading file', filePath);
       data = await fs.readFile(path.resolve(filePath), 'utf-8');
+      return JSON.parse(data);
     } catch (error) {
       console.error(`Error reading file ${filePath}:`, error.message);
       return null;
     }
-    try {
-      const parsed = JSON.parse(data); 
-      console.log('data parsed');
-      return parsed;
-    } catch (error) {
-      console.error('Error parsing data as json');
-      return null;
-    }
   }
   
-
-
 
 /**
  * Skrifar forsíðu HTML með tenglum á aðrar síður
@@ -57,7 +47,6 @@ async function readJson(filePath) {
  * @returns {Promise<void>} skrifar gögn í index.html
  */
 async function writeHtml(data) {
-    console.log('Starting to write HTML file...');
     if (!Array.isArray(data)) {
     console.error('Invalid data format, expected an array.');
     return;
@@ -66,12 +55,12 @@ async function writeHtml(data) {
     await ensureDirectoryExists(DIST_DIR);
     const html = data
     .map((item) => {
-      if (item.file) {
-        return `<li><a href="${item.file.replace('.json', '.html')}">${item.title}</a></li>`;
-      } else {
-        console.warn('Item missing file property:', item);
-        return '';
-      }
+      if (item.file && item.title) {
+        const link = item.file.replace('.json', '.html');
+        return `<li><a href="${link}">${item.title}</a></li>`;
+      } 
+      console.warn('Invalid data item:', item);
+      return '';
     })
     .join('\n');
   
@@ -99,22 +88,49 @@ async function writeHtml(data) {
     }
   }
 
-
-/**
- * 
- * Það tekur inn data og skilar string
- * @param {unknown} data
- * @returns{Array<{ title: string }>} skilar data sem streng en for now: any
- * 
- */
-
-function parseIndexJson(data) {
-  if (!Array.isArray(data)) {
-    console.error('Invalid JSON data. Expected an array.');
-    return [];
+  function validateEntry(entry) {
+    return entry && typeof entry.title === 'string' && typeof entry.file === 'string';
   }
-  return data;
-}
+
+  async function createIndividualHtmlFiles(data) {
+    for (const item of data) {
+      if (!validateEntry(item)) {
+        console.warn('Skipping invalid entry:', item);
+        continue;
+      }
+  
+      const filePath = path.join('./data', item.file);
+      const content = await readJson(filePath);
+  
+      if (!content) {
+        console.warn(`Skipping ${item.title} due to invalid or missing JSON content.`);
+        continue;
+      }
+  
+      const htmlFilePath = path.join(DIST_DIR, item.file.replace('.json', '.html'));
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html lang="is">
+        <head>
+          <meta charset="UTF-8">
+          <title>${item.title}</title>
+        </head>
+        <body>
+          <h1>${item.title}</h1>
+          <pre>${JSON.stringify(content, null, 2)}</pre>
+        </body>
+        </html>
+      `;
+  
+      try {
+        await fs.writeFile(htmlFilePath, htmlContent, 'utf-8');
+        console.log(`Generated HTML for ${item.title}: ${htmlFilePath}`);
+      } catch (error) {
+        console.error(`Error writing HTML for ${item.title}:`, error.message);
+      }
+    }
+  }
+
 
 
 /** 
@@ -128,22 +144,24 @@ async function main() {
 
     console.log('Starting program...');
     await ensureDirectoryExists(DIST_DIR);
+
     const indexJson = await readJson(INDEX_PATH);
     if (!indexJson) {
       console.error('Error reading index.json');
       return;
     }
     
-    const indexData = parseIndexJson(indexJson);
-    if (indexData.length === 0) {
-      console.error('No valid data in index.json');
+    const validData = indexJson.filter(validateEntry);
+    if (validData.length === 0) {
+      console.error('No valid data found in index.json');
       return;
     }
-    
-    await writeHtml(indexData);
+
+    await writeHtml(validData);
+    await createIndividualHtmlFiles(validData);
 
     console.log('Program completed successfully.');
-    console.log(indexData);
+   
   }
 
   main().catch((error) => {
