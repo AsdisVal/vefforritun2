@@ -75,8 +75,7 @@ async function writeHtml(data) {
 
   await ensureDirectoryExists(DIST_DIR);
 
-  //const htmlFilePath = 'dist/index.html';
-
+  
     const html = data.map((item) => `<li>${item.title}</li>`).join('\n');
 
     const htmlContent =  `
@@ -131,6 +130,8 @@ function parseIndexJson(data) {
 async function main() {
 
     console.log('Starting program...');
+
+    await ensureDirectoryExists(DIST_DIR);
 
     const indexJson = await readJson(INDEX_PATH);
     if (!indexJson) {
