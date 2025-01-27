@@ -1,13 +1,17 @@
 
-import { write } from 'node:fs';
+
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
 
-const INDEX_PATH = './data/index.json';
-const DIST_DIR = './dist';
+const INDEX_PATH = './data/index.json'; 
+const DIST_DIR = './dist'; // skráar slóðin sem við ætlum að skrifa í
 const HTML_FILE_PATH = path.join(DIST_DIR, 'index.html');
 
+/**
+ * Ensure that a directory exists, creating it if necessary.
+ * @param {*} directory 
+ */
 async function ensureDirectoryExists(directory) {
   console.log('Ensuring directory exists:', directory);
   try {
@@ -88,10 +92,33 @@ async function writeHtml(data) {
     }
   }
 
+  /**
+   * Validates that an entry has a title and a file property.
+    * @param {*} entry
+    * @returns {boolean} true if the entry is valid, otherwise false.
+   */
   function validateEntry(entry) {
-    return entry && typeof entry.title === 'string' && typeof entry.file === 'string';
+    if(entry && typeof entry === 'object') { 
+      const { title, file } = entry;
+      let isValid = true;
+      if (typeof title !== 'string' || title.trim() === '') {
+        console.warn(`Invalid title for entry: ${JSON.stringify(entry)}`);
+        isValid = false;
+      }
+      if (typeof file !== 'string' || file.trim() === '' || !file.endsWith('.json')) {
+        console.warn(`Invalid file path for entry: ${JSON.stringify(entry)}`);
+        isValid = false;
+      }
+      return isValid;
+    }
+    console.warn(`Entry is not a valid object: ${JSON.stringify(entry)}`);
+    return false
   }
 
+  /**
+   * Generates individual HTML files for each entry in the data, displaying the content of the corresponding JSON file.
+   * @param {*} data 
+   */
   async function createIndividualHtmlFiles(data) {
     for (const item of data) {
       if (!validateEntry(item)) {
@@ -133,20 +160,19 @@ async function writeHtml(data) {
 
 
 
-/** 
- *Keyrir forritið okkar: 
- * 1. Sækir gögn
- * 2. Staðfestir gögn (validation)
- * 3. Skrifar út HTML
- *  
-*/
+/**
+ * 1. Ensuring the output directory exists.
+ * 2. Reads the index.json file and validates its content.
+ * 3. Calls writeHtml to generate the index.html file.
+ * 4. Calls createIndividualHtmlFiles to generate individual HTML files for each valid entry.
+ */
 async function main() {
 
     console.log('Starting program...');
     await ensureDirectoryExists(DIST_DIR);
 
     const indexJson = await readJson(INDEX_PATH);
-    if (!indexJson) {
+    if (!Array.isArray(indexJson)) {
       console.error('Error reading index.json');
       return;
     }
