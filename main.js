@@ -16,17 +16,7 @@ async function ensureDirectoryExists(directory) {
   }
 }
 
-/*
-async function writeHtmlFile(htmlContent) {
-  await ensureDirectoryExists(DIST_DIR);
-  try {
-    await fs.writeFile(HTML_FILE_PATH, htmlContent, 'utf-8');
-    console.log(`File written to ${HTML_FILE_PATH}`);
-  } catch (error) {
-    console.error(`Error writing file ${HTML_FILE_PATH}:`, error.message);
-  }
-}
-*/
+
 
 
 /**
@@ -62,22 +52,29 @@ async function readJson(filePath) {
 
 
 /**
- * Skrifa HTML fyrir yfirlit í index.html
+ * Skrifar forsíðu HTML með tenglum á aðrar síður
  * @param {any} data 
  * @returns {Promise<void>} skrifar gögn í index.html
  */
 async function writeHtml(data) {
-  console.log('Starting to write HTML file...');
-  if (!Array.isArray(data)) {
+    console.log('Starting to write HTML file...');
+    if (!Array.isArray(data)) {
     console.error('Invalid data format, expected an array.');
     return;
-  }
+    }
 
-  await ensureDirectoryExists(DIST_DIR);
-
+    await ensureDirectoryExists(DIST_DIR);
+    const html = data
+    .map((item) => {
+      if (item.file) {
+        return `<li><a href="${item.file.replace('.json', '.html')}">${item.title}</a></li>`;
+      } else {
+        console.warn('Item missing file property:', item);
+        return '';
+      }
+    })
+    .join('\n');
   
-    const html = data.map((item) => `<li>${item.title}</li>`).join('\n');
-
     const htmlContent =  `
     <!DOCTYPE html>
     <html lang="is">
@@ -95,12 +92,12 @@ async function writeHtml(data) {
       `;
 
      try {
-    await fs.writeFile(HTML_FILE_PATH, htmlContent, 'utf-8');
-    console.log(`HTML written to ${HTML_FILE_PATH}`);
-  } catch (error) {
-    console.error(`Error writing HTML file:`, error.message);
+      await fs.writeFile(HTML_FILE_PATH, htmlContent, 'utf-8');
+      console.log(`HTML written to ${HTML_FILE_PATH}`);
+    } catch (error) {
+      console.error(`Error writing HTML file:`, error.message);
+    }
   }
-}
 
 
 /**
@@ -130,9 +127,7 @@ function parseIndexJson(data) {
 async function main() {
 
     console.log('Starting program...');
-
     await ensureDirectoryExists(DIST_DIR);
-
     const indexJson = await readJson(INDEX_PATH);
     if (!indexJson) {
       console.error('Error reading index.json');
@@ -144,9 +139,9 @@ async function main() {
       console.error('No valid data in index.json');
       return;
     }
-
+    
     await writeHtml(indexData);
-   
+
     console.log('Program completed successfully.');
     console.log(indexData);
   }
