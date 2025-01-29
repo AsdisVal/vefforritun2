@@ -164,7 +164,7 @@ async function writeHtml(data) {
       const filePath = path.join('./data', item.file);
       const content = await readJson(filePath);
 
-      if (!content) {
+      if (!content ||typeof content !== 'object' || !content.title) {
         logMessage('ERROR', `Skipping ${item.title} due to corrupt JSON file: ${filePath}`);
         return;
       }
