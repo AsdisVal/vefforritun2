@@ -1,5 +1,6 @@
 
 
+import { log } from 'node:console';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -8,16 +9,37 @@ const INDEX_PATH = './data/index.json';
 const DIST_DIR = './dist'; // skráarslóðin sem við ætlum að skrifa í
 const HTML_FILE_PATH = path.join(DIST_DIR, 'index.html');
 
+
 /**
- * Ensure that a directory exists, creating it if necessary.
- * @param {*} directory 
- */
-async function ensureDirectoryExists(directory) {
-  console.log('Ensuring directory exists:', directory);
+ * Logs a message with a specified level and optional data.
+ * @param {string} level - The log level (e.g., INFO, ERROR).
+ * @param {string} message - The log message.
+ * @param {any} [data=null] - Optional additional data to log.
+    details = `\n  → ${data instanceof Error ? data.stack || data.message : data}`;
+    */
+function logMessage(level, message, data = null) {
+  const timespamp = new Date().toISOString().replace('T', ' ').split('.')[0];
+  let details = '';
+
+  if (data instanceof Error) {
+    details = `\n  → ${data.stack || data.message}`;
+  } else if (data) {
+    details = `\n  → ${JSON.stringify(data, null, 2)}`;
+  }
+  console.log(`[${level} -  ${timespamp}] ${message}${details}`);
+}
+
+
+async function ensureDirectoryExists(directory){
   try {
-    await fs.mkdir(directory, { recursive: true });
-  } catch (error) {
-    console.error(`Error creating directory ${directory}:`, error.message);
+    await fs.access(directory); //called before attempting to create it.
+  } catch {
+    try {
+      await fs.mkdir(directory, { recursive: true });
+      logMessage('INFO', `Directory created: ${directory}`);
+    } catch (error) {
+      logMessage('ERROR', `Failed to create directory ${directory}`, error);
+    }
   }
 }
 
@@ -31,18 +53,22 @@ async function ensureDirectoryExists(directory) {
  * Skilar `null` ef villa kom upp.
  */
 async function readJson(filePath) {
+  
+  logMessage('INFO', 'Starting to read', filePath);
+
   let data;
   try {
-    console.log('reading file', filePath);
+    logMessage('INFO', `Reading file: ${filePath}`);
     data = await fs.readFile(path.resolve(filePath), 'utf-8');
-    return JSON.parse(data);
+    return JSON.parse(data); // skilar gögnum úr index.json skrá
   } catch (error) {
     if(error.code === 'ENOENT') {
+      logMessage('ERROR', `File not found: ${filePath}`, error);
       console.error(`File not found: ${filePath}`);
     } else if (error instanceof SyntaxError) {
-      console.error(`Error parsing JSON in file ${filePath}: ${error.message}`);
+      logMessage('ERROR', `Error parsing JSON in file ${filePath}: ${error.message}`, error);
     } else {
-      console.error(`Error reading file ${filePath}:`, error.message);
+      logMessage('ERROR', `Error reading file ${filePath}:`, error);
     }
     return null;
   }
@@ -50,7 +76,7 @@ async function readJson(filePath) {
   
 
   /**
-   * Validates that an entry has a title and a file property.
+   * Validates that an entry from json has a title and a file property.
     * @param {Object} entry
     * @returns {boolean} true if the entry is valid, otherwise false.
    */
@@ -60,18 +86,18 @@ async function readJson(filePath) {
       let isValid = true;
       // Check for valid title
       if (typeof title !== 'string' || title.trim() === '') {
-        console.warn(`Invalid title for entry: ${JSON.stringify(entry)}`);
+        logMessage('WARNING', `Invalid title for entry: ${JSON.stringify(entry)}`);
         isValid = false;
       }
       // Check for valid file path
       if (typeof file !== 'string' || file.trim() === '' || !file.endsWith('.json')) {
-        console.warn(`Invalid file path for entry: ${JSON.stringify(entry)}`);
+        logMessage('WARNING', `Invalid file path for entry: ${JSON.stringify(entry)}`);
         isValid = false;
       }
       
       return isValid;
     }
-    console.warn(`Entry is not a valid object: ${JSON.stringify(entry)}`);
+    logMessage('WARNING', `Entry is not a valid object: ${JSON.stringify(entry)}`);
     return false
   }
 
@@ -83,7 +109,7 @@ async function readJson(filePath) {
         await fs.access(filePath);
         filteredData.push(entry);
       } catch (error) {
-        console.warn(`Referenced JSON file not found: ${filePath}`);
+        logMessage('WARNING', `Referenced JSON file not found: ${filePath}`);
       }
     }
     return filteredData;
@@ -121,26 +147,28 @@ async function writeHtml(data) {
 
      try {
       await fs.writeFile(HTML_FILE_PATH, htmlContent, 'utf-8');
-      console.log(`HTML written to ${HTML_FILE_PATH}`);
+      logMessage('INFO', `HTML written to ${HTML_FILE_PATH}`);
     } catch (error) {
-      console.error(`Error writing HTML file:`, error.message);
+      logMessage('ERROR', `Error writing HTML file:`, error);
     }
   }
 
-  /**
-   * Generates individual HTML files for each entry in the data, displaying the content of the corresponding JSON file.
-   * @param {*} data 
-   */
-  async function createIndividualHtmlFiles(data) {
-    for (const item of data) {
+    /**
+     * Creates individual HTML files for each valid entry in the data array.
+     * @param {*} data 
+     */
+    async function createIndividualHtmlFiles(data) {
+    await ensureDirectoryExists(DIST_DIR);
+
+    const tasks = data.map(async (item) => {
       const filePath = path.join('./data', item.file);
       const content = await readJson(filePath);
-  
+
       if (!content) {
-        console.warn(`Skipping ${item.title} due to invalid or missing JSON content.`);
-        continue;
+        logMessage('ERROR', `Skipping ${item.title} due to corrupt JSON file: ${filePath}`);
+        return;
       }
-  
+
       const htmlFilePath = path.join(DIST_DIR, item.file.replace('.json', '.html'));
       const htmlContent = `
         <!DOCTYPE html>
@@ -155,14 +183,17 @@ async function writeHtml(data) {
         </body>
         </html>
       `;
-  
+
       try {
         await fs.writeFile(htmlFilePath, htmlContent, 'utf-8');
-        console.log(`Generated HTML for ${item.title}: ${htmlFilePath}`);
+        logMessage('INFO', `Generated HTML for ${item.title}: ${htmlFilePath}`);
       } catch (error) {
-        console.error(`Error writing HTML for ${item.title}:`, error.message);
+        logMessage('ERROR', `Error writing HTML for ${item.title}: ${htmlFilePath}`, error);
       }
-    }
+    });
+
+    await Promise.all(tasks);
+    
   }
 
 
@@ -173,30 +204,35 @@ async function writeHtml(data) {
   * 4. Calls createIndividualHtmlFiles to generate individual HTML files for each valid entry.
   */
   async function main() {
+    logMessage('INFO', 'Starting program...');
 
-    console.log('Starting program...');
+    logMessage('INFO', `Ensuring output directory exists: ${DIST_DIR}`);
     await ensureDirectoryExists(DIST_DIR);
 
     const indexJson = await readJson(INDEX_PATH);
     if (!Array.isArray(indexJson)) {
-      console.error('Error: index.json must contain an array of entries.');
+      logMessage('ERROR', 'Invalid index.json content.');
       return;
     }
     
     const validEntries = indexJson.filter(validateEntry);
     const existingFiles = await filterExistingJsonFiles(validEntries);
+
     if (existingFiles.length === 0) {
-      console.error('No valid data found in index.json');
+      logMessage('ERROR', 'No valid entries found in index.json');
       return;
     }
     
 
     await writeHtml(existingFiles);
-    await createIndividualHtmlFiles(existingFiles);
+    
+    const sortedData = existingFiles.sort((a, b) => a.title.localeCompare(b.title));
 
-    console.log('Program completed successfully.');
-   
+    await createIndividualHtmlFiles(sortedData);
+
+    logMessage('INFO', 'Program completed successfully.');
+  
   }
   main().catch((err) => {
-    console.error('Error running program:', err);
+    logMessage('ERROR', 'Error running program', err);
   });
