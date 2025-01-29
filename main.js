@@ -2,7 +2,9 @@
 
 import { log } from 'node:console';
 import fs from 'node:fs/promises';
+import { type } from 'node:os';
 import path from 'node:path';
+import { queryObjects } from 'node:v8';
 
 
 const INDEX_PATH = './data/index.json'; 
@@ -73,14 +75,37 @@ async function readJson(filePath) {
     return null;
   }
 }
-  
+ 
+/**
+ * Find out if the created html has a valid question and an answer.
+ */
+function validateQnA(entry) {
+  if(entry && typeof entry === 'object') { 
+    const {question, answer} = entry;
+    let isValidQnA = true;
+    if (typeof question !== 'string' || question.trim() === ''){
+      logMessage('ERROR', `Invalid question for entry: ${JSON.stringify(entry)}`)
+      isValidQnA = false;
+      return isValidQnA;
+    }
+    
+
+    if(typeof answer !== 'string' || answer.trim() === '') {
+      logMessage('ERROR', `Invalid answer for entry: ${JSON.stringify(entry)}`)
+      isValidQnA = false;
+      return isValidQnA;
+
+    }
+  }
+  return
+}
 
   /**
    * Validates that an entry from json has a title and a file property.
     * @param {Object} entry
-    * @returns {boolean} true if the entry is valid, otherwise false.
+    * 
    */
-  function validateEntry(entry) {
+  async function validateEntry(entry) {
     if(entry && typeof entry === 'object') { 
       const { title, file } = entry;
       let isValid = true;
@@ -94,16 +119,20 @@ async function readJson(filePath) {
         logMessage('WARNING', `Invalid file path for entry: ${JSON.stringify(entry)}`);
         isValid = false;
       }
-      
+
       return isValid;
     }
     logMessage('WARNING', `Entry is not a valid object: ${JSON.stringify(entry)}`);
-    return false
+    return false;
   }
 
   async function filterExistingJsonFiles(data) {
     const filteredData = [];
     for (const entry of data) {
+      if (!entry.file || typeof entry.file !== 'string') {
+        logMessage('WARNING', `Invalid file path for entry: ${JSON.stringify(entry)}`);
+        continue;
+      }
       const filePath = path.join('./data', entry.file);
       try {
         await fs.access(filePath);
@@ -153,21 +182,47 @@ async function writeHtml(data) {
     }
   }
 
+
+  
     /**
      * Creates individual HTML files for each valid entry in the data array.
-     * @param {*} data 
+     * @param {Array<Object>} data - Array of valid data entries 
      */
     async function createIndividualHtmlFiles(data) {
     await ensureDirectoryExists(DIST_DIR);
-
+    const goodQnA = await validateQnA(data);
+    while(goodQnA) {
+      
     const tasks = data.map(async (item) => {
       const filePath = path.join('./data', item.file);
       const content = await readJson(filePath);
 
-      if (!content ||typeof content !== 'object' || !content.title) {
+      
+      if(!validateEntry(content)){
+        return false;
+      } 
+      
+      /*
+      if (!content ||typeof content !== 'object' || !content.questions) {
         logMessage('ERROR', `Skipping ${item.title} due to corrupt JSON file: ${filePath}`);
         return;
-      }
+      }*/
+
+      const questionsHtml = content.questions
+      ? content.questions.map(q => {
+        const answersHtml = Array.isArray(q.answers)
+        ? q.answers.map(a => `<li>${a.answer} ${a.correct ? '(Correct)': ''}</li>`).join('')
+        : '<li>No answer available</li>';
+        return `
+        <div>
+          <h2>${q.question}</h2>
+            <ul>
+              ${answersHtml}
+            </ul>
+          </div>
+          `;
+      }).join('')
+      : '';
 
       const htmlFilePath = path.join(DIST_DIR, item.file.replace('.json', '.html'));
       const htmlContent = `
@@ -179,7 +234,7 @@ async function writeHtml(data) {
         </head>
         <body>
           <h1>${item.title}</h1>
-          <pre>${JSON.stringify(content, null, 2)}</pre>
+          ${questionsHtml}
         </body>
         </html>
       `;
@@ -193,7 +248,7 @@ async function writeHtml(data) {
     });
 
     await Promise.all(tasks);
-    
+    }
   }
 
 
@@ -217,6 +272,7 @@ async function writeHtml(data) {
     
     const validEntries = indexJson.filter(validateEntry);
     const existingFiles = await filterExistingJsonFiles(validEntries);
+    
 
     if (existingFiles.length === 0) {
       logMessage('ERROR', 'No valid entries found in index.json');
@@ -226,9 +282,12 @@ async function writeHtml(data) {
 
     await writeHtml(existingFiles);
     
-    const sortedData = existingFiles.sort((a, b) => a.title.localeCompare(b.title));
+    //const sortedData = existingFiles.sort((a, b) => a.title.localeCompare(b.title));
 
-    await createIndividualHtmlFiles(sortedData);
+
+    //await createIndividualHtmlFiles(sortedData);
+
+    await createIndividualHtmlFiles(existingFiles);
 
     logMessage('INFO', 'Program completed successfully.');
   
