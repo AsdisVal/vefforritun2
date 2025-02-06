@@ -92,27 +92,36 @@ function validateQnA(entry) {
     * @param {Object} entry
     * 
    */
-  function validateEntry(entry) {
-    if(!entry || typeof entry !== 'object') {
-      logMessage('WARNING', `Invalid entry:  ${JSON.stringify(entry)}`);
-      return false; 
+  function validateEntry(entry, isIndexEntry = false) {
+    if (!entry || typeof entry !== 'object') {
+      logMessage('WARNING', `Invalid entry (not an object): ${JSON.stringify(entry)}`);
+      return false;
     }
-
-    const { title, file } = entry;
-    const isValid = typeof title === 'string' 
-          && 
-          title.trim() !== '' 
-          &&
-          typeof file === 'string' 
-          && 
-          file.trim() !== '' 
-          && 
-          file.endsWith('.json');
   
-    if (!isValid) logMessage('WARNING', `Invalid entry: ${JSON.stringify(entry)}`);
+    const { title, file, questions } = entry;
   
-    return isValid;
+    // If validating `index.json` entries, `file` must exist
+    if (isIndexEntry) {
+      const isValidIndexEntry = typeof title === 'string' && title.trim() !== '' &&
+                                typeof file === 'string' && file.trim() !== '' && file.endsWith('.json');
+  
+      if (!isValidIndexEntry) {
+        logMessage('WARNING', `Invalid entry in index.json: ${JSON.stringify(entry)}`);
+      }
+      return isValidIndexEntry;
+    }
+  
+    // If validating individual JSON files (e.g., css.json), check `questions`
+    const isValidQuestionFile = typeof title === 'string' && title.trim() !== '' &&
+                                Array.isArray(questions) && questions.length > 0;
+  
+    if (!isValidQuestionFile) {
+      logMessage('WARNING', `Invalid question file: ${JSON.stringify(entry)}`);
+    }
+  
+    return isValidQuestionFile;
   }
+
 
   /**
    * Filters JSON files that actually exist.
@@ -141,14 +150,9 @@ function validateQnA(entry) {
  * @returns {Promise<void>} skrifar gögn í index.html
  */
 async function writeHtml(data) {
-  const html = data
-    .map((item) => {
-      const link = item.file.replace('.json', '.html');
-      return `<li><a href="${link}">${item.title}</a></li>`;     
-    })
-    .join('\n');
+  const html = data.map(item => `<li><a href="${item.file.replace('.json', '.html')}">${item.title}</a></li>`).join('\n');
   
-    const htmlContent =  `
+  const htmlContent =  `
     <!DOCTYPE html>
     <html lang="is">
     <head>
@@ -175,113 +179,80 @@ async function writeHtml(data) {
 
   
     /**
-     * Creates individual HTML files for each valid entry in the data array.
+     * Creates individual HTML files.
      * @param {Array<Object>} data - Array of valid data entries 
      */
     async function createIndividualHtmlFiles(data) {
-    await ensureDirectoryExists(DIST_DIR);
-    const goodQnA = await validateQnA(data);
-    while(goodQnA) {
-      
-    const tasks = data.map(async (item) => {
-      const filePath = path.join('./data', item.file);
-      const content = await readJson(filePath);
-
-      
-      if(!validateEntry(content)){
-        return false;
-      } 
-      
-      /*
-      if (!content ||typeof content !== 'object' || !content.questions) {
-        logMessage('ERROR', `Skipping ${item.title} due to corrupt JSON file: ${filePath}`);
-        return;
-      }*/
-
-      const questionsHtml = content.questions
-      ? content.questions.map(q => {
-        const answersHtml = Array.isArray(q.answers)
-        ? q.answers.map(a => `<li>${a.answer} ${a.correct ? '(Correct)': ''}</li>`).join('')
-        : '<li>No answer available</li>';
-        return `
-        <div>
-          <h2>${q.question}</h2>
-            <ul>
-              ${answersHtml}
-            </ul>
-          </div>
-          `;
-      }).join('')
-      : '';
-
-      const htmlFilePath = path.join(DIST_DIR, item.file.replace('.json', '.html'));
-      const htmlContent = `
-        <!DOCTYPE html>
-        <html lang="is">
-        <head>
-          <meta charset="UTF-8">
-          <title>${item.title}</title>
-        </head>
-        <body>
-          <h1>${item.title}</h1>
-          ${questionsHtml}
-        </body>
-        </html>
-      `;
-
-      try {
-        await fs.writeFile(htmlFilePath, htmlContent, 'utf-8');
-        logMessage('INFO', `Generated HTML for ${item.title}: ${htmlFilePath}`);
-      } catch (error) {
-        logMessage('ERROR', `Error writing HTML for ${item.title}: ${htmlFilePath}`, error);
-      }
-    });
-
-    await Promise.all(tasks);
+      await ensureDirectoryExists(DIST_DIR);
+    
+      await Promise.all(data.map(async (item) => {
+        const filePath = path.join('./data', item.file);
+        const content = await readJson(filePath);
+    
+        if (!content || !validateEntry(content)) return;
+    
+        const questionsHtml = content.questions?.map(q => {
+          if (!validateQnA(q)) return '';
+          const answersHtml = q.answers.map(a => `<li>${a.answer} ${a.correct ? '(Correct)' : ''}</li>`).join('');
+          return `<div><h2>${q.question}</h2><ul>${answersHtml}</ul></div>`;
+        }).join('') || '';
+    
+        const htmlFilePath = path.join(DIST_DIR, item.file.replace('.json', '.html'));
+        const htmlContent = `
+          <!DOCTYPE html>
+          <html lang="is">
+          <head>
+            <meta charset="UTF-8">
+            <title>${item.title}</title>
+          </head>
+          <body>
+            <h1>${item.title}</h1>
+            ${questionsHtml}
+          </body>
+          </html>
+        `;
+    
+        try {
+          await fs.writeFile(htmlFilePath, htmlContent, 'utf-8');
+          logMessage('INFO', `Generated HTML for ${item.title}: ${htmlFilePath}`);
+        } catch (error) {
+          logMessage('ERROR', `Error writing HTML for ${item.title}`, error);
+        }
+      }));
     }
-  }
-
+    
 
   /**
-  * 1. Ensuring the output directory exists.
-  * 2. Reads the index.json file and validates its content.
+  * Step 0: Ensuring the output directory exists.
+  * Step 1: Read index.json
+  * Step 2: Validate index.json entries
   * 3. Calls writeHtml to generate the index.html file.
   * 4. Calls createIndividualHtmlFiles to generate individual HTML files for each valid entry.
   */
   async function main() {
     logMessage('INFO', 'Starting program...');
-
-    logMessage('INFO', `Ensuring output directory exists: ${DIST_DIR}`);
     await ensureDirectoryExists(DIST_DIR);
 
+    // Step 1: Read index.json
     const indexJson = await readJson(INDEX_PATH);
     if (!Array.isArray(indexJson)) {
-      logMessage('ERROR', 'Invalid index.json content.');
+      logMessage('ERROR', 'index.json is invalid or missing.');
       return;
     }
     
-    const validEntries = indexJson.filter(validateEntry);
+    // Step 2: Validate index.json entries
+    const validEntries = indexJson.filter(entry => validateEntry(entry, true));
     const existingFiles = await filterExistingJsonFiles(validEntries);
-    
-
     if (existingFiles.length === 0) {
-      logMessage('ERROR', 'No valid entries found in index.json');
+      logMessage('ERROR', 'No valid entries found in index.json.');
       return;
     }
-    
 
+    // Step 3: Generate HTML files
     await writeHtml(existingFiles);
-    
-    //const sortedData = existingFiles.sort((a, b) => a.title.localeCompare(b.title));
-
-
-    //await createIndividualHtmlFiles(sortedData);
-
     await createIndividualHtmlFiles(existingFiles);
 
     logMessage('INFO', 'Program completed successfully.');
   
   }
-  main().catch((err) => {
-    logMessage('ERROR', 'Error running program', err);
-  });
+  main().catch((err) => logMessage('ERROR', 'Unhandled error', err));
