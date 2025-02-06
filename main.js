@@ -94,34 +94,31 @@ function validateQnA(entry) {
    */
   function validateEntry(entry, isIndexEntry = false) {
     if (!entry || typeof entry !== 'object') {
-      logMessage('WARNING', `Invalid entry (not an object): ${JSON.stringify(entry)}`);
+      logMessage('WARNING', `Skipping invalid entry: Not an object.`);
       return false;
     }
   
     const { title, file, questions } = entry;
   
-    // If validating `index.json` entries, `file` must exist
     if (isIndexEntry) {
-      const isValidIndexEntry = typeof title === 'string' && title.trim() !== '' &&
-                                typeof file === 'string' && file.trim() !== '' && file.endsWith('.json');
-  
-      if (!isValidIndexEntry) {
-        logMessage('WARNING', `Invalid entry in index.json: ${JSON.stringify(entry)}`);
+      // If validating index.json, ensure 'title' and 'file' exist
+      if (typeof title !== 'string' || title.trim() === '' || 
+          typeof file !== 'string' || file.trim() === '' || 
+          !file.endsWith('.json')) {
+        logMessage('WARNING', `Skipping invalid index entry: ${JSON.stringify(entry)}`);
+        return false;
       }
-      return isValidIndexEntry;
+      return true;
     }
   
-    // If validating individual JSON files (e.g., css.json), check `questions`
-    const isValidQuestionFile = typeof title === 'string' && title.trim() !== '' &&
-                                Array.isArray(questions) && questions.length > 0;
-  
-    if (!isValidQuestionFile) {
-      logMessage('WARNING', `Invalid question file: ${JSON.stringify(entry)}`);
+    // If validating a question file, ensure 'title' and 'questions' exist
+    if (typeof title !== 'string' || title.trim() === '' || !Array.isArray(questions)) {
+      logMessage('WARNING', `Skipping invalid question file: ${JSON.stringify(entry)}`);
+      return false;
     }
   
-    return isValidQuestionFile;
+    return true;
   }
-
 
   /**
    * Filters JSON files that actually exist.
@@ -191,11 +188,29 @@ async function writeHtml(data) {
     
         if (!content || !validateEntry(content)) return;
     
-        const questionsHtml = content.questions?.map(q => {
-          if (!validateQnA(q)) return '';
-          const answersHtml = q.answers.map(a => `<li>${a.answer} ${a.correct ? '(Correct)' : ''}</li>`).join('');
+        if (!Array.isArray(content.questions) || content.questions.length === 0) {
+          logMessage('WARNING', `Skipping ${item.title}: No valid questions.`);
+          return;
+        }
+    
+        const questionsHtml = content.questions.map(q => {
+          if (!q.question || typeof q.question !== 'string' || !Array.isArray(q.answers)) {
+            logMessage('WARNING', `Skipping invalid question: ${JSON.stringify(q)}`);
+            return '';
+          }
+    
+          const answersHtml = q.answers
+            .filter(a => typeof a.answer === 'string' && typeof a.correct === 'boolean') // Ensure valid answers
+            .map(a => `<li>${a.answer} ${a.correct ? '(Correct)' : ''}</li>`)
+            .join('');
+    
           return `<div><h2>${q.question}</h2><ul>${answersHtml}</ul></div>`;
-        }).join('') || '';
+        }).join('');
+    
+        if (!questionsHtml.trim()) {
+          logMessage('WARNING', `Skipping ${item.title}: No valid questions to display.`);
+          return;
+        }
     
         const htmlFilePath = path.join(DIST_DIR, item.file.replace('.json', '.html'));
         const htmlContent = `
@@ -220,7 +235,6 @@ async function writeHtml(data) {
         }
       }));
     }
-    
 
   /**
   * Step 0: Ensuring the output directory exists.
@@ -231,28 +245,34 @@ async function writeHtml(data) {
   */
   async function main() {
     logMessage('INFO', 'Starting program...');
+  
     await ensureDirectoryExists(DIST_DIR);
-
+  
     // Step 1: Read index.json
     const indexJson = await readJson(INDEX_PATH);
     if (!Array.isArray(indexJson)) {
       logMessage('ERROR', 'index.json is invalid or missing.');
       return;
     }
-    
-    // Step 2: Validate index.json entries
+  
+    // Step 2: Validate index.json entries and skip invalid ones
     const validEntries = indexJson.filter(entry => validateEntry(entry, true));
-    const existingFiles = await filterExistingJsonFiles(validEntries);
-    if (existingFiles.length === 0) {
+    if (validEntries.length === 0) {
       logMessage('ERROR', 'No valid entries found in index.json.');
       return;
     }
-
+  
+    const existingFiles = await filterExistingJsonFiles(validEntries);
+    if (existingFiles.length === 0) {
+      logMessage('ERROR', 'No valid question files found.');
+      return;
+    }
+  
     // Step 3: Generate HTML files
     await writeHtml(existingFiles);
     await createIndividualHtmlFiles(existingFiles);
-
-    logMessage('INFO', 'Program completed successfully.');
   
+    logMessage('INFO', 'Program completed successfully.');
   }
+  
   main().catch((err) => logMessage('ERROR', 'Unhandled error', err));
