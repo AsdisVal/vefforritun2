@@ -30,7 +30,7 @@ function logMessage(level, message, data = null) {
 
 async function ensureDirectoryExists(directory){
   try {
-    await fs.access(directory); //called before attempting to create it.
+    await fs.access(directory); 
   } catch {
     try {
       await fs.mkdir(directory, { recursive: true });
@@ -47,25 +47,30 @@ async function ensureDirectoryExists(directory){
  * Les skrá og skilar gögnum eða null.
  * @param {string} filePath skráin sem á að lesa
  *  
- * @returns {Promise<Object | null>}les skrá úr `filepath` og skilar innihaldi.
+ * @returns {Promise<unknown | null>}les skrá úr `filepath` og skilar innihaldi, og skilar null ef villa kom upp.
  * Skilar `null` ef villa kom upp.
  */
 async function readJson(filePath) {
-  
+  logMessage('INFO', `Start reading file: ${filePath}`);
   let data;
   try {
-    logMessage('INFO', `Reading file: ${filePath}`);
     data = await fs.readFile(path.resolve(filePath), 'utf-8');
-    return JSON.parse(data); // skilar gögnum úr index.json skrá
   } catch (error) {
     if(error.code === 'ENOENT') {
       logMessage('ERROR', `File not found: ${filePath}`);
       console.error(`File not found: ${filePath}`);
-    } else if (error instanceof SyntaxError) {
+    } 
+    if (error instanceof SyntaxError) {
       logMessage('ERROR', `JSON syntax error in file: ${filePath}` , error);
-    } else {
-      logMessage('ERROR', `Error reading file ${filePath}:`, error);
-    }
+    } 
+    return null;
+  }
+
+  try {
+    const parseData = JSON.parse(data);
+    return parseData;
+  } catch(error) {
+    logMessage('ERROR', 'Error parsing the data as JSON.');
     return null;
   }
 }
@@ -76,13 +81,13 @@ async function readJson(filePath) {
 function validateQnA(entry) {
   if(entry && typeof entry === 'object') { 
     const {question, answers} = entry;
-    const isValidQuestion = typeof question === 'string' && question.trim() != '';
+    const hasValidQuestion = typeof question === 'string' && question.trim() != '';
     const hasValidAnswers = Array.isArray(answers) && answers.every(a => typeof a.answer === 'string');
     
-    if(!isValidQuestion) logMessage('ERROR', `Invalid question: ${JSON.stringify(entry)}`);
+    if(!hasValidQuestion) logMessage('ERROR', `Invalid question: ${JSON.stringify(entry)}`);
     if(!hasValidAnswers) logMessage('ERROR', `Invalid answers:  ${JSON.stringify(entry)}`);
 
-    return isValidQuestion && hasValidAnswers;
+    return hasValidQuestion && hasValidAnswers;
   }
   return false;
 }
@@ -101,7 +106,6 @@ function validateQnA(entry) {
     const { title, file, questions } = entry;
   
     if (isIndexEntry) {
-      // If validating index.json, ensure 'title' and 'file' exist
       if (typeof title !== 'string' || title.trim() === '' || 
           typeof file !== 'string' || file.trim() === '' || 
           !file.endsWith('.json')) {
@@ -111,8 +115,8 @@ function validateQnA(entry) {
       return true;
     }
   
-    // If validating a question file, ensure 'title' and 'questions' exist
-    if (typeof title !== 'string' || title.trim() === '' || !Array.isArray(questions)) {
+    if (typeof title !== 'string' || title.trim() === '' || 
+      !Array.isArray(questions) || questions.length === 0) {
       logMessage('WARNING', `Skipping invalid question file: ${JSON.stringify(entry)}`);
       return false;
     }
@@ -127,11 +131,17 @@ function validateQnA(entry) {
    */
   async function filterExistingJsonFiles(data) {
     const validEntries = await Promise.all(data.map(async (entry) => {
-      const filePath = path.join('./data', entry.file);
+      const filePath = path.resolve('data', entry.file);
       try {
         await fs.access(filePath);
+        const content = await readJson(filePath);
+        
+        if(!validateEntry(content) || !Array.isArray(content.questions)) {
+          logMessage('WARNING', `Skipping invalid or corrupt file: ${filePath}`);
+          return null;
+        }
         return entry;
-      } catch {
+      } catch (error){
         logMessage('WARNING', `JSON file not found: ${filePath}`);
         return null;
       }
@@ -274,5 +284,5 @@ async function writeHtml(data) {
   
     logMessage('INFO', 'Program completed successfully.');
   }
-  
+
   main().catch((err) => logMessage('ERROR', 'Unhandled error', err));
