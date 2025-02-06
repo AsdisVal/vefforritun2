@@ -4,3 +4,4 @@ dist/css.html
 dist/js.html
 dist/html.html
 package-lock.json
+node_modules
