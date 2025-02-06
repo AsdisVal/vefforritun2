@@ -1,24 +1,20 @@
 
 
-import { log } from 'node:console';
 import fs from 'node:fs/promises';
-import { type } from 'node:os';
 import path from 'node:path';
-import { queryObjects } from 'node:v8';
 
 
 const INDEX_PATH = './data/index.json'; 
-const DIST_DIR = './dist'; // skráarslóðin sem við ætlum að skrifa í
+const DIST_DIR = './dist'; 
 const HTML_FILE_PATH = path.join(DIST_DIR, 'index.html');
 
 
 /**
- * Logs a message with a specified level and optional data.
+ * Logs messages with a timestamp and level.
  * @param {string} level - The log level (e.g., INFO, ERROR).
  * @param {string} message - The log message.
  * @param {any} [data=null] - Optional additional data to log.
-    details = `\n  → ${data instanceof Error ? data.stack || data.message : data}`;
-    */
+  */
 function logMessage(level, message, data = null) {
   const timespamp = new Date().toISOString().replace('T', ' ').split('.')[0];
   let details = '';
@@ -56,8 +52,6 @@ async function ensureDirectoryExists(directory){
  */
 async function readJson(filePath) {
   
-  logMessage('INFO', 'Starting to read', filePath);
-
   let data;
   try {
     logMessage('INFO', `Reading file: ${filePath}`);
@@ -65,10 +59,10 @@ async function readJson(filePath) {
     return JSON.parse(data); // skilar gögnum úr index.json skrá
   } catch (error) {
     if(error.code === 'ENOENT') {
-      logMessage('ERROR', `File not found: ${filePath}`, error);
+      logMessage('ERROR', `File not found: ${filePath}`);
       console.error(`File not found: ${filePath}`);
     } else if (error instanceof SyntaxError) {
-      logMessage('ERROR', `Error parsing JSON in file ${filePath}: ${error.message}`, error);
+      logMessage('ERROR', `JSON syntax error in file: ${filePath}` , error);
     } else {
       logMessage('ERROR', `Error reading file ${filePath}:`, error);
     }
@@ -77,72 +71,68 @@ async function readJson(filePath) {
 }
  
 /**
- * Find out if the created html has a valid question and an answer.
+ * Validates a question and its answer. 
  */
 function validateQnA(entry) {
   if(entry && typeof entry === 'object') { 
-    const {question, answer} = entry;
-    let isValidQnA = true;
-    if (typeof question !== 'string' || question.trim() === ''){
-      logMessage('ERROR', `Invalid question for entry: ${JSON.stringify(entry)}`)
-      isValidQnA = false;
-      return isValidQnA;
-    }
+    const {question, answers} = entry;
+    const isValidQuestion = typeof question === 'string' && question.trim() != '';
+    const hasValidAnswers = Array.isArray(answers) && answers.every(a => typeof a.answer === 'string');
     
+    if(!isValidQuestion) logMessage('ERROR', `Invalid question: ${JSON.stringify(entry)}`);
+    if(!hasValidAnswers) logMessage('ERROR', `Invalid answers:  ${JSON.stringify(entry)}`);
 
-    if(typeof answer !== 'string' || answer.trim() === '') {
-      logMessage('ERROR', `Invalid answer for entry: ${JSON.stringify(entry)}`)
-      isValidQnA = false;
-      return isValidQnA;
-
-    }
+    return isValidQuestion && hasValidAnswers;
   }
-  return
+  return false;
 }
 
   /**
-   * Validates that an entry from json has a title and a file property.
+   * Validates a JSON entry for title and file properties.
     * @param {Object} entry
     * 
    */
-  async function validateEntry(entry) {
-    if(entry && typeof entry === 'object') { 
-      const { title, file } = entry;
-      let isValid = true;
-      // Check for valid title
-      if (typeof title !== 'string' || title.trim() === '') {
-        logMessage('WARNING', `Invalid title for entry: ${JSON.stringify(entry)}`);
-        isValid = false;
-      }
-      // Check for valid file path
-      if (typeof file !== 'string' || file.trim() === '' || !file.endsWith('.json')) {
-        logMessage('WARNING', `Invalid file path for entry: ${JSON.stringify(entry)}`);
-        isValid = false;
-      }
-
-      return isValid;
+  function validateEntry(entry) {
+    if(!entry || typeof entry !== 'object') {
+      logMessage('WARNING', `Invalid entry:  ${JSON.stringify(entry)}`);
+      return false; 
     }
-    logMessage('WARNING', `Entry is not a valid object: ${JSON.stringify(entry)}`);
-    return false;
+
+    const { title, file } = entry;
+    const isValid = typeof title === 'string' 
+          && 
+          title.trim() !== '' 
+          &&
+          typeof file === 'string' 
+          && 
+          file.trim() !== '' 
+          && 
+          file.endsWith('.json');
+  
+    if (!isValid) logMessage('WARNING', `Invalid entry: ${JSON.stringify(entry)}`);
+  
+    return isValid;
   }
 
+  /**
+   * Filters JSON files that actually exist.
+   * @param {*} data 
+   * @returns 
+   */
   async function filterExistingJsonFiles(data) {
-    const filteredData = [];
-    for (const entry of data) {
-      if (!entry.file || typeof entry.file !== 'string') {
-        logMessage('WARNING', `Invalid file path for entry: ${JSON.stringify(entry)}`);
-        continue;
-      }
+    const validEntries = await Promise.all(data.map(async (entry) => {
       const filePath = path.join('./data', entry.file);
       try {
         await fs.access(filePath);
-        filteredData.push(entry);
-      } catch (error) {
-        logMessage('WARNING', `Referenced JSON file not found: ${filePath}`);
+        return entry;
+      } catch {
+        logMessage('WARNING', `JSON file not found: ${filePath}`);
+        return null;
       }
-    }
-    return filteredData;
+    }));
+    return validEntries.filter(Boolean);
   }
+  
 
 
 /**
