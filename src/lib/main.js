@@ -11,7 +11,7 @@ const HTML_FILE_PATH = path.join(DIST_DIRECTORY, 'index.html');
  * @param {string} message - The log message.
  * @param {any} [data=null] - Optional additional data to log.
  */
-function logMessage(level, message, data = null) {
+export function logMessage(level, message, data = null) {
   const timespamp = new Date().toISOString().replace('T', ' ').split('.')[0];
   let details = '';
 
@@ -28,7 +28,7 @@ function logMessage(level, message, data = null) {
  * @param {any} directory
  * @returns true if that directry exists, otherwise returns false.
  */
-async function ensureDirectoryExists(directory) {
+export async function ensureDirectoryExists(directory) {
   try {
     await fs.access(directory);
     logMessage('INFO', `Directory ${directory} can be accessed.`);
@@ -59,7 +59,7 @@ async function makeDirectory(directory) {
  * @returns {Promise<any | null>}les skrá úr `filepath` og skilar innihaldi, og skilar null ef villa kom upp.
  * Skilar `null` ef villa kom upp.
  */
-async function readJson(filePath) {
+export async function readJson(filePath) {
   logMessage('INFO', `Start reading file: ${filePath}`);
   let data;
   try {
@@ -111,7 +111,7 @@ function validateQnA(entry) {
  * @param {Object} entry
  *
  */
-function validateEntry(entry, isIndexEntry = false) {
+export function validateEntry(entry, isIndexEntry = false) {
   if (!entry || typeof entry !== 'object') {
     logMessage('WARNING', `Skipping invalid entry: Not an object.`);
     return false;
@@ -157,7 +157,7 @@ function validateEntry(entry, isIndexEntry = false) {
  * @param {*} data
  * @returns
  */
-async function filterExistingJsonFiles(data) {
+export async function filterExistingJsonFiles(data) {
   const validEntries = await Promise.all(
     data.map(async (entry) => {
       const filePath = path.resolve('data', entry.file);
@@ -187,7 +187,7 @@ async function filterExistingJsonFiles(data) {
  * @param {Object[]} data - Array of valid data entries.
  * @returns {Promise<void>} skrifar gögn í index.html
  */
-async function writeHtml(data) {
+export async function writeHtml(data) {
   const html = data
     .map(
       (item) =>
@@ -325,7 +325,7 @@ async function createIndividualHtmlFiles(data) {
  * 3. Calls writeHtml to generate the index.html file.
  * 4. Calls createIndividualHtmlFiles to generate individual HTML files for each valid entry.
  */
-async function main() {
+export async function main() {
   logMessage('INFO', 'Starting program...');
 
   await ensureDirectoryExists(DIST_DIRECTORY);
