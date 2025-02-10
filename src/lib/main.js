@@ -197,7 +197,7 @@ async function writeHtml(data) {
     )
     .join('\n');
 
-  const htmlContent = `
+  const htmlContent = /* html */ `
     <!DOCTYPE html>
     <html lang="is" class="">
 
@@ -294,7 +294,7 @@ async function createIndividualHtmlFiles(data) {
         DIST_DIRECTORY,
         item.file.replace('.json', '.html')
       );
-      const htmlContent = `
+      const htmlContent = /* html */ `
           <!DOCTYPE html>
           <html lang="is">
           <head>
