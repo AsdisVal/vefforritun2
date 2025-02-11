@@ -1,5 +1,6 @@
 import { jest } from '@jest/globals';
 import fs from 'node:fs/promises';
+jest.mock('node:fs/promises');
 import path from 'node:path';
 import {
   main,
@@ -9,12 +10,12 @@ import {
   filterExistingJsonFiles,
   writeHtml,
   logMessage,
-} from '../lib/main.js';
+} from './main.js';
 
-// Mock filesystem and path modules
 jest.mock('node:fs/promises');
-jest.mock('node:path');
-
+jest.mock('node:path', () => {
+  return { ...path };
+});
 // Mock console.log for logMessage testing
 global.console = { log: jest.fn() };
 
@@ -46,13 +47,15 @@ describe('ensureDirectoryExists', () => {
   });
 
   test('creates directory when not exists', async () => {
-    fs.access = jest.fn().mockImplementation(() => Promise.reject(new Error()));
+    fs.access.mockRejectedValue(new Error('ENOENT'));
+    fs.mkdir.mockResolvedValue(undefined);
+
     await ensureDirectoryExists('./new-dir');
     expect(fs.mkdir).toHaveBeenCalledWith('./new-dir', { recursive: true });
   });
 
   test('does nothing for existing directory', async () => {
-    fs.access = jest.fn().mockResolvedValueOnce('./existing-dir');
+    fs.access.mockResolvedValue(undefined);
     await ensureDirectoryExists('./existing-dir');
     expect(fs.mkdir).not.toHaveBeenCalled();
   });
@@ -73,7 +76,9 @@ describe('readJson', () => {
   });
 
   test('handles missing files', async () => {
-    fs.readFile.mockRejectedValueOnce({ code: 'ENOENT' });
+    fs.readFile.mockRejectedValueOnce(
+      Object.assign(new Error(), { code: 'ENOENT' })
+    );
     const result = await readJson('./missing.json');
     expect(result).toBeNull();
   });
@@ -97,6 +102,11 @@ describe('validateEntry', () => {
     };
     expect(validateEntry(entry)).toBe(true);
   });
+
+  test('invalid QnA entry with malformed questions', () => {
+    const entry = { title: 'Test', questions: 'not-an-array' };
+    expect(validateEntry(entry)).toBe(false);
+  });
 });
 
 describe('filterExistingJsonFiles', () => {
@@ -106,7 +116,6 @@ describe('filterExistingJsonFiles', () => {
       { title: 'Invalid', file: 'missing.json' },
     ];
 
-    // Mock readJson responses
     readJson
       .mockResolvedValueOnce({ questions: [] }) // exists.json
       .mockResolvedValueOnce(null); // missing.json
@@ -145,19 +154,16 @@ describe('main', () => {
   });
 
   test('successful execution flow', async () => {
-    // Mock index.json data
     const mockIndex = [
       { title: 'Valid', file: 'valid.json' },
       { title: 'Invalid', file: 'invalid.json' },
     ];
 
-    // Mock question data
     const mockQuestions = {
       title: 'Test Questions',
       questions: [{ question: 'Q1', answers: [] }],
     };
 
-    // Setup mock chain
     readJson
       .mockResolvedValueOnce(mockIndex) // index.json
       .mockResolvedValueOnce(mockQuestions) // valid.json
@@ -165,7 +171,6 @@ describe('main', () => {
 
     await main();
 
-    // Verify critical steps
     expect(fs.mkdir).toHaveBeenCalledWith('./dist', { recursive: true });
     expect(writeHtml).toHaveBeenCalled();
     expect(console.log).toHaveBeenCalledWith(

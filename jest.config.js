@@ -1,16 +1,14 @@
 export default {
   testEnvironment: 'node',
-  extensionsToTreatAsEsm: ['.js'],
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
+  transform: {}, // Disable Jest's transformation (for ESM)
   collectCoverage: true,
   coverageDirectory: 'coverage',
-  collectCoverageFrom: [
-    'src/lib/**/*.js', // Match your project's requirements
-  ],
+  collectCoverageFrom: ['src/*.js'],
+  coveragePathIgnorePatterns: ['/node_modules/', '/coverage/', '/dist/'],
   coverageThreshold: {
-    // Enforce 50% coverage
     global: {
       lines: 50,
     },
