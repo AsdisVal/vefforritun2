@@ -5,19 +5,21 @@ import path from 'node:path';
 import {
   main,
   ensureDirectoryExists,
-  readJson,
+  readJson as originalReadJson,
   validateEntry,
   filterExistingJsonFiles,
   writeHtml,
   logMessage,
 } from './main.js';
 
+const readJson = jest.fn(originalReadJson);
+
 jest.mock('node:fs/promises');
 jest.mock('node:path', () => {
   return { ...path };
 });
 // Mock console.log for logMessage testing
-global.console = { log: jest.fn() };
+global.console = { ...console, log: jest.fn() };
 
 describe('logMessage', () => {
   beforeEach(() => {
@@ -47,7 +49,7 @@ describe('ensureDirectoryExists', () => {
   });
 
   test('creates directory when not exists', async () => {
-    fs.access.mockRejectedValue(new Error('ENOENT'));
+    fs.access = jest.fn().mockRejectedValue(new Error('ENOENT'));
     fs.mkdir.mockResolvedValue(undefined);
 
     await ensureDirectoryExists('./new-dir');
